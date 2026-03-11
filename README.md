@@ -1,82 +1,12 @@
 # ⚗️ ORCA QM Simulation Pipeline
 
-> Automation pipeline for QM region extraction, input file generation, and batch execution of ORCA quantum chemistry simulations for UV-induced excitation studies in bacterial proteins.
+> Automation pipeline for QM region extraction, input file generation, and batch execution of ORCA quantum chemistry simulations.
 
 ---
 
-## 📌 Project Overview
+## 📌 Overview
 
-This project automates the complete workflow for running quantum chemistry simulations using ORCA. The study focuses on **UV-induced excitation in bacterial proteins**, analyzing how electron behavior changes as molecules transition from ground state to excited state.
-
-The pipeline handles:
-- Extracting the QM region from a docked protein complex
-- Generating optimized geometries for three molecular states
-- Creating 450+ ORCA input files automatically
-- Running batch simulations across multiple methods and solvent environments
-
----
-
-## 🧪 Simulation Parameters
-
-| Parameter | Value |
-|---|---|
-| Molecular States | Neutral, Radical, Reduced |
-| Methods (Phase 1) | DFT, CDFT, SDFT |
-| Methods (Phase 2) | TDDFT *(remote machine, later)* |
-| Epsilon Range | 1 → 50 |
-| Phase 1 Simulations | **450** (3 states × 3 methods × 50 ε) |
-| Functional | B3LYP |
-| Basis Set | def2-TZVP |
-| Solvent Model | CPCM |
-| ORCA nprocs | 4 |
-| ORCA maxcore | 2048 MB |
-
----
-
-## 🗂️ Folder Structure
-
-```
-orca_simulation/
-│
-├── 00_raw_protein/              # Input protein & docked complex files
-│   └── docked_complex.pdb
-│
-├── 01_qm_region/                # Extracted QM region coordinates
-│   └── qm_region.xyz
-│
-├── 02_state_generation/         # Geometry optimization for each state
-│   ├── neutral/
-│   │   ├── input/               # ORCA optimization input
-│   │   ├── output/              # ORCA optimization output
-│   │   └── neutral_opt.xyz      # Final optimized geometry
-│   ├── radical/
-│   │   ├── input/
-│   │   ├── output/
-│   │   └── radical_opt.xyz
-│   └── reduced/
-│       ├── input/
-│       ├── output/
-│       └── reduced_opt.xyz
-│
-├── 03_simulations/              # Production simulation runs
-│   ├── neutral/
-│   │   ├── DFT/
-│   │   │   ├── input/           # 50 input files (eps_01.inp ... eps_50.inp)
-│   │   │   └── output/          # eps_01/ ... eps_50/ (auto-created at runtime)
-│   │   ├── TDDFT/
-│   │   ├── CDFT/
-│   │   └── SDFT/
-│   ├── radical/                 # Same structure as neutral
-│   └── reduced/                 # Same structure as neutral
-│
-├── scripts/                     # All automation scripts
-│   ├── extract_qm.py
-│   ├── generate_states.py
-│   ├── generate_inputs.py
-│   └── run_batch.py
-│
-└── logs/                        # Runtime logs
-```
+This pipeline automates the complete workflow for running quantum chemistry simulations using ORCA. It handles extraction of the QM region from a docked protein complex, geometry optimization for multiple molecular states, automatic generation of hundreds of input files, and batch execution across multiple computational methods and solvent environments.
 
 ---
 
@@ -87,7 +17,7 @@ Docked Complex (PDB)
         │
         ▼
 ┌─────────────────────┐
-│   extract_qm.py     │  Extract QM region using distance cutoff (Biopython)
+│   extract_qm.py     │  Extract QM region using distance cutoff
 └─────────────────────┘
         │
         ▼
@@ -95,7 +25,7 @@ Docked Complex (PDB)
         │
         ▼
 ┌─────────────────────┐
-│ generate_states.py  │  Run ORCA geometry optimization for 3 states
+│ generate_states.py  │  Run ORCA geometry optimization for each state
 └─────────────────────┘
         │
         ▼
@@ -105,8 +35,8 @@ Docked Complex (PDB)
         │
         ▼
 ┌─────────────────────┐
-│ generate_inputs.py  │  Generate 450 ORCA input files
-└─────────────────────┘  (3 states × 3 methods × 50 epsilon)
+│ generate_inputs.py  │  Generate ORCA input files
+└─────────────────────┘  (states × methods × epsilon values)
         │
         ▼
   03_simulations/**/input/
@@ -122,12 +52,60 @@ Docked Complex (PDB)
 
 ---
 
-## 📜 Script Details
+## 🗂️ Folder Structure
+
+```
+orca_simulation/
+│
+├── 00_raw_protein/              # Input protein & docked complex files
+│   ├── protein.pdb
+│   └── docked_complex.pdb
+│
+├── 01_qm_region/                # Extracted QM region coordinates
+│   └── qm_region.xyz
+│
+├── 02_state_generation/         # Geometry optimization for each state
+│   ├── neutral/
+│   │   ├── input/
+│   │   ├── output/
+│   │   └── neutral_opt.xyz
+│   ├── radical/
+│   │   ├── input/
+│   │   ├── output/
+│   │   └── radical_opt.xyz
+│   └── reduced/
+│       ├── input/
+│       ├── output/
+│       └── reduced_opt.xyz
+│
+├── 03_simulations/              # Production simulation runs
+│   ├── neutral/
+│   │   ├── DFT/
+│   │   │   ├── input/           # eps_01.inp ... eps_50.inp
+│   │   │   └── output/          # eps_01/ ... eps_50/ (auto-created)
+│   │   ├── TDDFT/
+│   │   ├── CDFT/
+│   │   └── SDFT/
+│   ├── radical/
+│   └── reduced/
+│
+├── scripts/
+│   ├── extract_qm.py
+│   ├── generate_states.py
+│   ├── generate_inputs.py
+│   └── run_batch.py
+│
+└── logs/
+```
+
+---
+
+## 📜 Scripts
 
 ### `extract_qm.py`
-Reads the docked complex PDB file and extracts the QM region using a **distance cutoff method** around the ligand.
+Reads the docked complex PDB file and extracts the QM region using a distance cutoff around the ligand.
 
-- Library: `Biopython` (`Bio.PDB`, `NeighborSearch`)
+- Library: `Biopython`
 - Default cutoff: `5.0 Å` (configurable)
 - Output: `01_qm_region/qm_region.xyz`
 
@@ -135,10 +113,16 @@ Reads the docked complex PDB file and extracts the QM region using a **distance 
 python scripts/extract_qm.py
 ```
 
+Configure before running:
+```python
+LIGAND_NAME = "LIG"   # 3-letter ligand residue name from PDB
+CUTOFF = 5.0          # distance cutoff in angstroms
+```
+
 ---
 
 ### `generate_states.py`
-Creates three optimized geometries by running ORCA geometry optimization with different charge and multiplicity settings.
+Runs ORCA geometry optimization for three molecular states using the extracted QM region.
 
 | State | Charge | Multiplicity |
 |---|---|---|
@@ -150,10 +134,18 @@ Creates three optimized geometries by running ORCA geometry optimization with di
 python scripts/generate_states.py
 ```
 
+Configure before running:
+```python
+FUNCTIONAL = "B3LYP"
+BASIS_SET  = "def2-TZVP"
+NPROCS     = 4
+MAXCORE    = 2048
+```
+
 ---
 
 ### `generate_inputs.py`
-Generates all ORCA input files by looping over states, methods, and epsilon values. All 450 files are saved into the correct folders automatically.
+Generates all ORCA input files by iterating over states, methods, and epsilon values. Files are saved automatically into the correct folders.
 
 ```bash
 python scripts/generate_inputs.py
@@ -162,10 +154,10 @@ python scripts/generate_inputs.py
 ---
 
 ### `run_batch.py`
-Runs ORCA on all generated input files. Supports **CLI arguments** for parallel execution across team members.
+Runs ORCA on all generated input files. Supports CLI arguments for selective execution.
 
 ```bash
-# Run everything
+# Run all simulations
 python scripts/run_batch.py
 
 # Run specific state
@@ -180,9 +172,7 @@ python scripts/run_batch.py --state reduced --method CDFT --eps-start 1 --eps-en
 
 ---
 
-## ⚡ ORCA Input File Template
-
-All input files follow this structure — only method keywords, charge, multiplicity, and epsilon change:
+## ⚡ ORCA Input File Structure
 
 ```
 ! B3LYP def2-TZVP OPT CPCM
@@ -209,57 +199,23 @@ end
 | DFT | Standard keywords only |
 | CDFT | Additional `%cdft` constraints block |
 | SDFT | `UKS` keyword + multiplicity change |
-| TDDFT | `%tddft` block with `nroots` *(Phase 2)* |
+| TDDFT | `%tddft` block with `nroots` |
 
 ---
 
-## 👥 Parallel Execution Plan
+## 🖥️ Requirements
 
-Simulations are distributed by molecular state so team members can run independently:
-
-| Person | State | Simulations |
-|---|---|---|
-| Person 1 | Neutral | 150 (3 methods × 50 ε) |
-| Person 2 | Radical | 150 (3 methods × 50 ε) |
-| Person 3 | Reduced | 150 (3 methods × 50 ε) |
-| Person 4 & 5 | TDDFT (Phase 2) | 150 on remote machine |
+- Python 3.8+
+- Biopython — `pip install biopython`
+- ORCA installed and available in system PATH
 
 ---
 
-## 🖥️ System Requirements
+## ⚠️ Notes
 
-| Component | Spec |
-|---|---|
-| CPU | Intel i5-10300H (4 physical cores) |
-| RAM | 16 GB |
-| GPU | Not used (ORCA is CPU-only) |
-| OS | Windows / Linux |
-| Python | 3.8+ |
-| ORCA | Must be installed and in system PATH |
-| Biopython | `pip install biopython` |
-
----
-
-## 📊 Current Status
-
-- [x] Folder structure created
-- [x] Repository initialized
-- [x] `extract_qm.py` — complete
-- [x] `generate_states.py` — complete
-- [ ] `generate_inputs.py` — in progress
-- [ ] `run_batch.py` — pending
-- [ ] Protein structure files from coordinator — pending
-- [ ] CDFT fragment definitions — pending confirmation
-
----
-
-## ⚠️ Important Notes
-
-- **Never commit output files** — `.gbw`, `.out`, `.tmp` files are large and gitignored
-- **Always verify ORCA input files** before batch runs — wrong functional = entire month wasted
-- **TDDFT is excluded from Phase 1** — will run on remote machine later
-- **Do not use GPU settings** — ORCA does not support GPU acceleration
-
----
+- Output files (`.gbw`, `.out`, `.tmp`) are gitignored — they are large and should stay local
+- Always verify input files before running batch simulations
+- ORCA does not use GPU — CPU cores and RAM are the relevant specs
+- Output subfolders (`eps_01/`, `eps_02/`, ...) are created automatically at runtime by `run_batch.py`
 
 *This pipeline is part of an ongoing research project on UV-induced excitation in bacterial proteins.*
