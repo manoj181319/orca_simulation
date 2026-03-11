@@ -39,7 +39,6 @@ The pipeline handles:
 orca_simulation/
 │
 ├── 00_raw_protein/              # Input protein & docked complex files
-│   ├── protein.pdb
 │   └── docked_complex.pdb
 │
 ├── 01_qm_region/                # Extracted QM region coordinates
