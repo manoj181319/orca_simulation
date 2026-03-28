@@ -109,8 +109,7 @@ def freeze_and_filter(ws, freeze_cell="A2"):
 # Sheet 1: Redox Protein Targets
 # ---------------------------------------------------------------------------
 def build_sheet1(wb, ranked_genes):
-    ws = wb.active
-    ws.title = "Redox Protein Targets"
+    ws = wb.create_sheet("Redox Protein Targets")
     ws.sheet_view.showGridLines = False
     ws.row_dimensions[1].height = 30
 
@@ -229,7 +228,7 @@ def build_sheet3(wb, recommended_pairs):
 # Title / metadata sheet (injected as first sheet)
 # ---------------------------------------------------------------------------
 def build_cover(wb):
-    ws = wb.create_sheet("About", 0)
+    ws = wb["About"]   # sheet was pre-renamed in main() before this call
     ws.sheet_view.showGridLines = False
 
     meta = [
@@ -291,15 +290,14 @@ def main():
 
     wb = openpyxl.Workbook()
 
-    # Sheet order: About, Redox Protein Targets, Ligand Mentions, Recommended Pairs
-    build_cover(wb)           # adds "About" at index 0
-    build_sheet1(wb, ranked_genes)        # active sheet (index 1 after cover)
+    # Rename the default empty sheet to "About" before build_cover populates it.
+    # This avoids the MergedCell read-only error: if build_cover ran first and
+    # merged A1:B1, then build_sheet1 used wb.active it would hit that merged cell.
+    wb.active.title = "About"
+    build_cover(wb)
+    build_sheet1(wb, ranked_genes)
     build_sheet2(wb, scored_data)
     build_sheet3(wb, recommended_pairs)
-
-    # Remove default empty sheet if it exists
-    if "Sheet" in wb.sheetnames:
-        del wb["Sheet"]
 
     # Set "Redox Protein Targets" as the active sheet on open
     wb.active = wb["Redox Protein Targets"]

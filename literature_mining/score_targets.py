@@ -63,9 +63,10 @@ CATEGORY_WEIGHTS = {
 }
 
 # ---------------------------------------------------------------------------
-# PDB availability — manually curated for known P. aeruginosa redox proteins
-# This is a static list; update when new structures are deposited.
-# Source: PDB search performed March 2026
+# PDB availability — proteins with at least one crystal structure in PDB.
+# NOTE: This only means the protein structure exists. It does NOT mean a
+# docked complex with the simulation ligand is available.
+# needs_docking is determined by HAS_COCRYSTAL_WITH_LIGAND below.
 # ---------------------------------------------------------------------------
 HAS_PDB_STRUCTURE = {
     "katA", "katB", "ahpC", "ahpF", "oxyR", "soxR",
@@ -85,6 +86,25 @@ HAS_PDB_STRUCTURE = {
     "rhlR", "rhlI",
     "mvfR",
     "phzM", "phzS",
+}
+
+# ---------------------------------------------------------------------------
+# Co-crystal structures: proteins where a PDB entry includes the specific
+# simulatable ligand bound in the active site.
+# ONLY these pairs do NOT need docking from Shiva Sir.
+# Intentionally conservative — when in doubt, mark as needing docking.
+# Source: Manual PDB inspection, March 2026
+# ---------------------------------------------------------------------------
+HAS_COCRYSTAL_WITH_LIGAND = {
+    ("katA", "heme"),
+    ("katA", "haem"),
+    ("ahpC", "FAD"),
+    ("trxB", "FAD"),
+    ("trxB", "NADPH"),
+    ("gor",  "FAD"),
+    ("gor",  "glutathione"),
+    ("sdhA", "ubiquinone"),
+    ("sdhB", "ubiquinone"),
 }
 
 # ---------------------------------------------------------------------------
@@ -205,7 +225,9 @@ def main():
         item["rank"] = rank
 
     # Recommended protein-ligand pairs:
-    # Top candidates that have both a known PDB structure and a simulatable ligand
+    # needs_docking = True unless a co-crystal structure exists for this exact
+    # (gene, ligand) pair. Having a PDB structure alone is NOT sufficient —
+    # the protein must already be crystallised WITH the specific ligand.
     recommended_pairs = [
         {
             "rank": item["rank"],
@@ -214,7 +236,7 @@ def main():
             "suggested_ligand": item["top_ligand"],
             "has_pdb": item["has_pdb"],
             "score": item["final_score"],
-            "needs_docking": not item["has_pdb"],
+            "needs_docking": (item["gene"], item["top_ligand"]) not in HAS_COCRYSTAL_WITH_LIGAND,
         }
         for item in scored
         if item["has_simulatable_ligand"]
