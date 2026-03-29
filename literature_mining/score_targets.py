@@ -4,17 +4,18 @@ Reads extracted targets and scores each gene/protein for simulation priority.
 
 Scoring formula (weights defined as constants at top of file):
     score = (W_CITATION  * normalised_citation_frequency)
-          + (W_LIGAND    * has_known_ligand)
+          + (W_LIGAND    * has_simulatable_ligand)
           + (W_PDB       * has_pdb_structure)
           + (W_CATEGORY  * category_weight)
-          + (W_COMENTION * normalised_ligand_comention_count)
+          + (W_COMENTION * normalised_signal_ligand_diversity)
 
-All terms are normalised to [0, 1] before weighting so the final score
-is always in [0, 1].
+All terms are normalised to [0, 1]. Final score is always in [0, 1].
 
-Category weights reflect biological relevance to redox-driven AMR:
-    oxidative_stress > electron_transport > redox_enzyme > efflux >
-    iron_metabolism > regulation > phenazine > quorum_sensing
+Ligand assignment:
+    top_ligand comes directly from the 'top_ligand' field in extracted_targets.json,
+    which is set by GENE_BIOCHEMISTRY in extract_targets.py (biochemistry-first).
+    Co-mention statistics are used ONLY for the diversity bonus (W_COMENTION).
+    Noise ligands (pyocyanin, iron, phenazine, etc.) are excluded from diversity.
 
 Input:
     literature_mining/extracted/extracted_targets.json
@@ -69,52 +70,50 @@ CATEGORY_WEIGHTS = {
 # needs_docking is determined by HAS_COCRYSTAL_WITH_LIGAND below.
 # ---------------------------------------------------------------------------
 HAS_PDB_STRUCTURE = {
-    "katA", "katB", "ahpC", "ahpF", "oxyR", "soxR",
+    # Confirmed P. aeruginosa PAO1 crystal structures in RCSB PDB (March 2026).
+    # soxR excluded: only E. coli SoxR structures exist; Pa-specific not confirmed.
+    "katA", "katB", "ahpC", "ahpF", "oxyR",
     "sodA", "sodB", "sodM",
-    "trxA", "trxB",
-    "grxA",
-    "gor",
-    "nuoA", "nuoB",
-    "sdhA", "sdhB",
-    "cioA",
-    "fdxA",
-    "fur",
-    "pvdA", "pvdD",
-    "mexA", "mexB", "oprM",
-    "mexC", "mexD",
-    "lasR", "lasI",
-    "rhlR", "rhlI",
-    "mvfR",
+    "trxA", "trxB", "grxA", "gor",
+    "nuoA", "nuoB", "sdhA", "sdhB", "cioA", "fdxA",
+    "fur", "pvdA", "pvdD",
+    "mexA", "mexB", "oprM", "mexC", "mexD",
+    "mexR",   # PDB 1LNW (oxidised), 4LFH — Pa MexR confirmed
+    "lasR", "lasI", "rhlR", "rhlI", "mvfR",
     "phzM", "phzS",
 }
 
 # ---------------------------------------------------------------------------
-# Co-crystal structures: proteins where a PDB entry includes the specific
-# simulatable ligand bound in the active site.
-# ONLY these pairs do NOT need docking from Shiva Sir.
-# Intentionally conservative — when in doubt, mark as needing docking.
-# Source: Manual PDB inspection, March 2026
+# Co-crystal structures: (gene, ligand) pairs where a PDB entry contains the
+# specific simulation ligand bound in the active site of the Pa protein.
+# ONLY these pairs are marked "No docking needed" in the report.
+# Conservative by design — when in doubt, always require docking.
 # ---------------------------------------------------------------------------
 HAS_COCRYSTAL_WITH_LIGAND = {
-    ("katA", "heme"),
-    ("katA", "haem"),
-    ("ahpC", "FAD"),
-    ("trxB", "FAD"),
-    ("trxB", "NADPH"),
-    ("gor",  "FAD"),
-    ("gor",  "glutathione"),
-    ("sdhA", "ubiquinone"),
-    ("sdhB", "ubiquinone"),
+    ("katA",  "heme"),       # PDB 4E37 — Pa PAO1 KatA + HEM confirmed
+    ("katA",  "NADPH"),      # PDB 4E37 — NADPH also present at peripheral site
+    ("trxB",  "FAD"),        # TrxB flavoprotein structures with FAD confirmed
+    ("gor",   "FAD"),        # Glutathione reductase flavoprotein with FAD
+    ("gor",   "glutathione"),# Glutathione reductase with GSH substrate
+    ("sdhA",  "FAD"),        # Complex II SdhA with FAD confirmed
+    ("sdhA",  "ubiquinone"), # Complex II with ubiquinone
+    ("sdhB",  "ubiquinone"), # Complex II Fe-S to ubiquinone
+    ("lasR",  "3OC12-HSL"),  # PDB 2UV0, 3IX3 — LasR LBD with autoinducer
+    ("rhlR",  "C4-HSL"),     # PDB 3T5K, 7R3H, 8B4A — RhlR with C4-HSL
 }
 
 # ---------------------------------------------------------------------------
-# Ligands that are simulatable with ORCA (confirmed by Shiva Sir or standard)
-# A gene co-mentioning one of these gets the ligand bonus
+# Simulatable ligands — small molecules suitable for ORCA DFT/TDDFT simulation.
+# Used only to determine whether a gene gets the W_LIGAND score bonus.
+# top_ligand itself always comes from GENE_BIOCHEMISTRY via the JSON.
 # ---------------------------------------------------------------------------
 SIMULATABLE_LIGANDS = {
-    "NADH", "NADPH", "FAD", "FMN", "heme", "haem", "ubiquinone",
-    "pyocyanin", "phenazine", "glutathione", "ferredoxin",
-    "coenzyme A", "CoA", "flavin", "quinone",
+    "NADH", "NADPH", "FAD", "FMN", "heme", "haem", "ubiquinone", "menaquinone",
+    "glutathione", "ferredoxin", "CoA", "coenzyme A", "flavin", "quinone", "SAM",
+    "3OC12-HSL", "3-oxo-C12-HSL", "C4-HSL", "N-butanoyl-HSL",
+    "H2O2", "hydrogen peroxide", "organic hydroperoxide",
+    "Fe2+", "Mn2+", "[2Fe-2S]", "HHQ", "PQS",
+    # Note: pyocyanin, iron, phenazine intentionally excluded (LIGAND_NOISE)
 }
 
 
@@ -122,31 +121,18 @@ SIMULATABLE_LIGANDS = {
 # Scoring helpers
 # ---------------------------------------------------------------------------
 def normalise(values: list) -> list:
-    """Min-max normalise a list of floats to [0, 1]."""
     if not values:
         return values
-    min_v = min(values)
-    max_v = max(values)
-    if max_v == min_v:
+    lo, hi = min(values), max(values)
+    if hi == lo:
         return [0.0] * len(values)
-    return [(v - min_v) / (max_v - min_v) for v in values]
-
-
-def has_simulatable_ligand(ligands_co_mentioned: dict) -> bool:
-    return any(lig in SIMULATABLE_LIGANDS for lig in ligands_co_mentioned)
-
-
-def top_ligand(ligands_co_mentioned: dict) -> str:
-    if not ligands_co_mentioned:
-        return ""
-    return max(ligands_co_mentioned, key=ligands_co_mentioned.get)
+    return [(v - lo) / (hi - lo) for v in values]
 
 
 def ligand_diversity_score(ligands_co_mentioned: dict) -> float:
-    """Number of distinct simulatable ligands co-mentioned (capped at 5)."""
-    count = sum(
-        1 for lig in ligands_co_mentioned if lig in SIMULATABLE_LIGANDS
-    )
+    """Count distinct SIGNAL (non-noise) simulatable ligands co-mentioned (cap 5).
+    Noise ligands are already separated in the JSON by extract_targets.py."""
+    count = sum(1 for lig in ligands_co_mentioned if lig in SIMULATABLE_LIGANDS)
     return min(count, 5) / 5.0
 
 
@@ -169,8 +155,9 @@ def main():
 
     print(f"Scoring {len(genes)} genes...\n")
 
-    # --- Raw values ---
-    citation_counts = [d["paper_count"] for d in genes.values()]
+    # --- Raw values for normalisation ---
+    citation_counts    = [d["paper_count"] for d in genes.values()]
+    # Use signal co-mentions only (noise ligands already separated in JSON)
     ligand_diversity_raw = [
         ligand_diversity_score(d.get("ligands_co_mentioned", {}))
         for d in genes.values()
@@ -182,13 +169,18 @@ def main():
     scored = []
     for i, (gene, data) in enumerate(genes.items()):
         category = data.get("category", "")
-        ligands_co = data.get("ligands_co_mentioned", {})
+        # top_ligand and simulatable come from GENE_BIOCHEMISTRY via the JSON.
+        # Co-mention stats are used only for the diversity bonus (W_COMENTION).
+        best_ligand  = data.get("top_ligand", "")
+        is_simulatable = data.get("simulatable", False)
+        # Signal co-mentions only (noise ligands already separated by extract_targets)
+        signal_ligands = data.get("ligands_co_mentioned", {})
 
-        citation_score   = norm_citations[i]
-        ligand_score     = 1.0 if has_simulatable_ligand(ligands_co) else 0.0
-        pdb_score        = 1.0 if gene in HAS_PDB_STRUCTURE else 0.0
-        category_score   = CATEGORY_WEIGHTS.get(category, 0.3)
-        comention_score  = ligand_diversity_raw[i]
+        citation_score  = norm_citations[i]
+        ligand_score    = 1.0 if is_simulatable else 0.0
+        pdb_score       = 1.0 if gene in HAS_PDB_STRUCTURE else 0.0
+        category_score  = CATEGORY_WEIGHTS.get(category, 0.3)
+        comention_score = ligand_diversity_raw[i]
 
         final_score = (
             W_CITATION  * citation_score +
@@ -199,15 +191,19 @@ def main():
         )
 
         scored.append({
-            "gene": gene,
-            "protein": data.get("protein", ""),
-            "function": data.get("function", ""),
-            "category": category,
-            "paper_count": data["paper_count"],
-            "has_pdb": gene in HAS_PDB_STRUCTURE,
-            "has_simulatable_ligand": has_simulatable_ligand(ligands_co),
-            "top_ligand": top_ligand(ligands_co),
-            "ligands_co_mentioned": ligands_co,
+            "gene":         gene,
+            "protein":      data.get("protein", ""),
+            "function":     data.get("function", ""),
+            "category":     category,
+            "paper_count":  data["paper_count"],
+            "has_pdb":      gene in HAS_PDB_STRUCTURE,
+            "simulatable":  is_simulatable,
+            "top_ligand":   best_ligand,
+            "ligand_role":  data.get("ligand_role", ""),
+            "ligand_basis": data.get("ligand_basis", ""),
+            "ligand_note":  data.get("ligand_note", ""),
+            "ligands_co_mentioned":       signal_ligands,
+            "ligands_noise_co_mentioned": data.get("ligands_noise_co_mentioned", {}),
             "sample_papers": data.get("sample_papers", []),
             "score_breakdown": {
                 "citation":  round(W_CITATION  * citation_score,  4),
@@ -224,23 +220,23 @@ def main():
     for rank, item in enumerate(scored, 1):
         item["rank"] = rank
 
-    # Recommended protein-ligand pairs:
-    # needs_docking = True unless a co-crystal structure exists for this exact
-    # (gene, ligand) pair. Having a PDB structure alone is NOT sufficient —
-    # the protein must already be crystallised WITH the specific ligand.
+    # Recommended pairs: only genes marked simulatable=True in GENE_BIOCHEMISTRY.
+    # needs_docking = True unless a confirmed co-crystal exists for (gene, ligand).
     recommended_pairs = [
         {
-            "rank": item["rank"],
-            "gene": item["gene"],
-            "protein": item["protein"],
+            "rank":             item["rank"],
+            "gene":             item["gene"],
+            "protein":          item["protein"],
             "suggested_ligand": item["top_ligand"],
-            "has_pdb": item["has_pdb"],
-            "score": item["final_score"],
-            "needs_docking": (item["gene"], item["top_ligand"]) not in HAS_COCRYSTAL_WITH_LIGAND,
+            "ligand_role":      item["ligand_role"],
+            "ligand_basis":     item["ligand_basis"],
+            "has_pdb":          item["has_pdb"],
+            "score":            item["final_score"],
+            "needs_docking":    (item["gene"], item["top_ligand"]) not in HAS_COCRYSTAL_WITH_LIGAND,
         }
         for item in scored
-        if item["has_simulatable_ligand"]
-    ][:20]   # Top 20 recommended pairs for the report
+        if item["simulatable"]
+    ][:20]
 
     output = {
         "total_genes_scored": len(scored),
@@ -259,18 +255,18 @@ def main():
         json.dump(output, f, indent=2, ensure_ascii=False)
 
     print(f"Scoring complete. Top 15 candidates:\n")
-    print(f"  {'Rank':<5} {'Gene':<8} {'Score':<7} {'PDB':<5} {'Ligand':<6} {'Category':<20} {'Protein'}")
-    print(f"  {'-'*90}")
+    print(f"  {'Rank':<5} {'Gene':<8} {'Score':<7} {'PDB':<5} {'Sim':<5} {'Category':<20} {'Ligand':<22} {'Protein'}")
+    print(f"  {'-'*100}")
     for item in scored[:15]:
         pdb = "Yes" if item["has_pdb"] else "No"
-        lig = "Yes" if item["has_simulatable_ligand"] else "No"
+        sim = "Yes" if item["simulatable"] else "No"
         print(
             f"  {item['rank']:<5} {item['gene']:<8} {item['final_score']:<7.4f} "
-            f"{pdb:<5} {lig:<6} {item['category']:<20} {item['protein']}"
+            f"{pdb:<5} {sim:<5} {item['category']:<20} {item['top_ligand']:<22} {item['protein']}"
         )
 
     print(f"\nSaved to: {OUTPUT_FILE}")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
