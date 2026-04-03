@@ -17,6 +17,8 @@ Fixes applied in this version:
     - soxR [2Fe-2S] gets a special note in the Notes column warning about
       metal-cluster handling in ORCA inputs
     - trxA NADPH gets a note clarifying NADPH acts via TrxB, not direct binding
+    - Reference Paper column added to both Redox Protein Targets and Recommended
+      Pairs sheets — clickable hyperlinks to PDB, PubMed, PMC, or UniProt
 
 Input:
     literature_mining/extracted/scored_targets.json
@@ -29,6 +31,7 @@ Usage:
 """
 
 import json
+import re
 from pathlib import Path
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -95,6 +98,155 @@ SPECIAL_NOTES = {
 
 
 # ---------------------------------------------------------------------------
+# GENE_REFERENCES — authoritative reference URLs for every gene.
+#
+# Used as the primary lookup for the "Reference Paper" column in both sheets.
+# Format: { gene: (url, display_text) }
+# Hierarchy: PDB co-crystal > primary literature (PMC/PubMed) > UniProt search.
+# Falls back to basis_to_url() for any gene not listed here.
+# ---------------------------------------------------------------------------
+GENE_REFERENCES = {
+    # Catalases
+    "katA":  ("https://www.rcsb.org/structure/4E37",
+              "PDB 4E37 — KatA + heme + NADPH"),
+    "katB":  ("https://pmc.ncbi.nlm.nih.gov/articles/PMC177506/",
+              "PMC177506 — KatB heme catalase in Pa"),
+    "katE":  ("https://www.uniprot.org/uniprotkb?query=katE+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — KatE Pa"),
+    # Peroxiredoxin system
+    "ahpC":  ("https://www.sciencedirect.com/science/article/pii/S2213231721002342",
+              "ScienceDirect — AhpC neutralizes hydroperoxides"),
+    "ahpF":  ("https://www.sciencedirect.com/science/article/pii/S2213231721002342",
+              "ScienceDirect — AhpCF peroxidase system"),
+    # Redox-sensing regulators
+    "oxyR":  ("https://www.sciencedirect.com/science/article/pii/S0923250811001756",
+              "ScienceDirect — OxyR H2O2 sensor Pa"),
+    "soxR":  ("https://pubmed.ncbi.nlm.nih.gov/9614965/",
+              "PubMed 9614965 — SoxR in Pa"),
+    "soxS":  ("https://pubmed.ncbi.nlm.nih.gov/9614965/",
+              "PubMed 9614965 — SoxRS system Pa"),
+    "mexR":  ("https://pubmed.ncbi.nlm.nih.gov/34912548/",
+              "PubMed 34912548 — MexR/NalD redox sensing"),
+    # Superoxide dismutases
+    "sodA":  ("https://pmc.ncbi.nlm.nih.gov/articles/PMC206923/",
+              "PMC206923 — sodA cloning and characterisation Pa"),
+    "sodB":  ("https://pmc.ncbi.nlm.nih.gov/articles/PMC177481/",
+              "PMC177481 — sodB FeSOD in Pa"),
+    "sodM":  ("https://pmc.ncbi.nlm.nih.gov/articles/PMC1828791/",
+              "PMC1828791 — sodM cambialistic SOD Pa virulence"),
+    # Thioredoxin system
+    "trxA":  ("https://pubmed.ncbi.nlm.nih.gov/22609922/",
+              "PubMed 22609922 — Pa thioredoxin-dependent peroxidase"),
+    "trxB":  ("https://en.wikipedia.org/wiki/Thioredoxin_reductase",
+              "Wikipedia — Thioredoxin reductase FAD cofactor"),
+    "trxC":  ("https://www.uniprot.org/uniprotkb?query=trxC+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — TrxC Pa"),
+    # Glutaredoxin / glutathione system
+    "grxA":  ("https://www.uniprot.org/uniprotkb?query=grxA+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — GrxA Pa"),
+    "grxB":  ("https://www.uniprot.org/uniprotkb?query=grxB+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — GrxB Pa"),
+    "gshA":  ("https://www.uniprot.org/uniprotkb?query=gshA+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — GshA Pa"),
+    "gshB":  ("https://www.uniprot.org/uniprotkb?query=gshB+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — GshB Pa"),
+    "gor":   ("https://www.uniprot.org/uniprotkb?query=gor+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — Glutathione reductase Pa"),
+    # NADH/NADPH metabolism & electron transport
+    "ndh":   ("https://www.uniprot.org/uniprotkb?query=ndh+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — NADH dehydrogenase II Pa"),
+    "nuoA":  ("https://www.uniprot.org/uniprotkb?query=nuoA+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — NuoA Complex I Pa"),
+    "nuoB":  ("https://www.uniprot.org/uniprotkb?query=nuoB+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — NuoB Complex I Pa"),
+    "nuoN":  ("https://www.uniprot.org/uniprotkb?query=nuoN+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — NuoN Complex I Pa"),
+    "sdhA":  ("https://www.uniprot.org/uniprotkb?query=sdhA+pseudomonas+aeruginosa+FAD&reviewed=true",
+              "UniProt — SdhA Complex II FAD-binding subunit"),
+    "sdhB":  ("https://www.uniprot.org/uniprotkb?query=sdhB+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — SdhB Complex II Fe-S subunit"),
+    # Cytochromes
+    "cioA":  ("https://www.uniprot.org/uniprotkb?query=cioA+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — CioA cyanide-insensitive oxidase"),
+    "cioB":  ("https://www.uniprot.org/uniprotkb?query=cioB+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — CioB"),
+    "cyoA":  ("https://www.uniprot.org/uniprotkb?query=cyoA+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — CyoA cytochrome bo3"),
+    "coxA":  ("https://www.uniprot.org/uniprotkb?query=coxA+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — CoxA cytochrome c oxidase"),
+    # Ferredoxins
+    "fdxA":  ("https://www.uniprot.org/uniprotkb?query=fdxA+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — FdxA ferredoxin I Pa"),
+    "fdxB":  ("https://www.uniprot.org/uniprotkb?query=fdxB+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — FdxB ferredoxin II Pa"),
+    # Iron metabolism
+    "fur":   ("https://pmc.ncbi.nlm.nih.gov/articles/PMC5648857/",
+              "PMC5648857 — Fur Fe2+ corepressor Pa"),
+    "pvdA":  ("https://pubmed.ncbi.nlm.nih.gov/17015659/",
+              "PubMed 17015659 — PvdA ornithine hydroxylase Pa"),
+    "pvdD":  ("https://www.uniprot.org/uniprotkb?query=pvdD+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — PvdD NRPS"),
+    "pchA":  ("https://www.uniprot.org/uniprotkb?query=pchA+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — PchA pyochelin biosynthesis"),
+    "bfrA":  ("https://www.uniprot.org/uniprotkb?query=bfrA+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — BfrA bacterioferritin Pa"),
+    "bfrB":  ("https://www.uniprot.org/uniprotkb?query=bfrB+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — BfrB bacterioferritin Pa"),
+    # Phenazine biosynthesis
+    "phzA1": ("https://www.uniprot.org/uniprotkb?query=phzA+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — PhzA1 Pa"),
+    "phzB1": ("https://www.uniprot.org/uniprotkb?query=phzB+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — PhzB1 Pa"),
+    "phzM":  ("https://pubmed.ncbi.nlm.nih.gov/17376257/",
+              "PubMed 17376257 — PhzM SAM methyltransferase Pa"),
+    "phzS":  ("https://pubmed.ncbi.nlm.nih.gov/17376257/",
+              "PubMed 17376257 — PhzS flavin hydroxylase Pa"),
+    "phzH":  ("https://www.uniprot.org/uniprotkb?query=phzH+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — PhzH Pa"),
+    # Efflux pumps
+    "mexA":  ("https://www.uniprot.org/uniprotkb?query=mexA+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — MexA efflux fusion protein"),
+    "mexB":  ("https://www.uniprot.org/uniprotkb?query=mexB+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — MexB RND pump"),
+    "oprM":  ("https://www.uniprot.org/uniprotkb?query=oprM+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — OprM outer membrane channel"),
+    "mexC":  ("https://www.uniprot.org/uniprotkb?query=mexC+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — MexC"),
+    "mexD":  ("https://www.uniprot.org/uniprotkb?query=mexD+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — MexD"),
+    "mexE":  ("https://www.uniprot.org/uniprotkb?query=mexE+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — MexE"),
+    "mexF":  ("https://www.uniprot.org/uniprotkb?query=mexF+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — MexF"),
+    "mexX":  ("https://www.uniprot.org/uniprotkb?query=mexX+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — MexX"),
+    "mexY":  ("https://www.uniprot.org/uniprotkb?query=mexY+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — MexY"),
+    # Quorum sensing
+    "lasR":  ("https://www.rcsb.org/structure/3IX3",
+              "PDB 3IX3 — LasR + 3OC12-HSL co-crystal"),
+    "lasI":  ("https://pubmed.ncbi.nlm.nih.gov/15306017/",
+              "PubMed 15306017 — LasI 3OC12-HSL synthase"),
+    "rhlR":  ("https://www.rcsb.org/structure/8B4A",
+              "PDB 8B4A — RhlR + C4-HSL co-crystal"),
+    "rhlI":  ("https://www.nature.com/articles/s41467-023-43702-4",
+              "Nature Commun. — RhlI C4-HSL synthase"),
+    "mvfR":  ("https://www.nature.com/articles/s41467-023-43702-4",
+              "Nature Commun. — PqsR binds HHQ/PQS"),
+    "pqsA":  ("https://www.uniprot.org/uniprotkb?query=pqsA+pseudomonas+aeruginosa&reviewed=true",
+              "UniProt — PqsA anthraniloyl-CoA ligase"),
+}
+
+
+def get_gene_ref(gene: str, basis: str):
+    """Return (url, display_text) for a gene's reference paper.
+    Checks GENE_REFERENCES first; falls back to parsing basis_to_url()."""
+    if gene in GENE_REFERENCES:
+        return GENE_REFERENCES[gene]
+    return basis_to_url(basis)
+
+
+# ---------------------------------------------------------------------------
 # Style helpers
 # ---------------------------------------------------------------------------
 def hf(size=11, color="FFFFFF", bold=True):
@@ -147,6 +299,72 @@ def hyperlink_cell(ws, row, col, url, text):
 def freeze_filter(ws, cell="A2"):
     ws.freeze_panes = cell
     ws.auto_filter.ref = ws.dimensions
+
+
+# ---------------------------------------------------------------------------
+# Reference URL parser
+#
+# Parses the ligand_basis string (from GENE_BIOCHEMISTRY) into a clickable
+# URL. Returns (url, display_text). If no parseable identifier is found,
+# returns (None, basis_text) so the cell renders as plain text.
+#
+# Patterns handled:
+#   PDB XXXX        → https://www.rcsb.org/structure/XXXX (first ID if multiple)
+#   PMC\d+          → https://pmc.ncbi.nlm.nih.gov/articles/PMCXXXXXX/
+#   PubMed \d+      → https://pubmed.ncbi.nlm.nih.gov/XXXXXXXX/
+#   ScienceDirect S…→ https://www.sciencedirect.com/science/article/pii/SXXXXXXXX
+#   Nature Comm s…  → https://www.nature.com/articles/sXXXXX
+#   OUP \d+         → https://academic.oup.com/nar/article/XXXXXXXX
+#   Wikipedia XXX   → https://en.wikipedia.org/wiki/XXX
+# ---------------------------------------------------------------------------
+def basis_to_url(basis: str):
+    if not basis:
+        return None, ""
+
+    # PDB IDs — 4-character alphanumeric e.g. "PDB 4E37" or "PDB 2UV0, 3IX3"
+    pdb_match = re.search(r'\bPDB\s+([A-Z0-9]{4})', basis, re.IGNORECASE)
+    if pdb_match:
+        pdb_id = pdb_match.group(1).upper()
+        return f"https://www.rcsb.org/structure/{pdb_id}", f"PDB {pdb_id}"
+
+    # PMC IDs — "PMC177506"
+    pmc_match = re.search(r'\bPMC(\d+)\b', basis, re.IGNORECASE)
+    if pmc_match:
+        pmc_id = pmc_match.group(1)
+        return f"https://pmc.ncbi.nlm.nih.gov/articles/PMC{pmc_id}/", f"PMC{pmc_id}"
+
+    # PubMed IDs — "PubMed 15306017"
+    pubmed_match = re.search(r'\bPubMed\s+(\d+)\b', basis, re.IGNORECASE)
+    if pubmed_match:
+        pmid = pubmed_match.group(1)
+        return f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/", f"PubMed {pmid}"
+
+    # ScienceDirect PII — "ScienceDirect S0923250811001756"
+    sd_match = re.search(r'\bScienceDirect\s+(S[0-9A-Z]+)\b', basis, re.IGNORECASE)
+    if sd_match:
+        pii = sd_match.group(1)
+        return f"https://www.sciencedirect.com/science/article/pii/{pii}", f"ScienceDirect"
+
+    # Nature Communications DOI slug — "Nature Comm s41467-023-43702-4"
+    nat_match = re.search(r'\bNature Comm\w*\s+(s[\d\-]+)\b', basis, re.IGNORECASE)
+    if nat_match:
+        slug = nat_match.group(1)
+        return f"https://www.nature.com/articles/{slug}", f"Nature Commun."
+
+    # OUP article ID — "OUP 8222440"
+    oup_match = re.search(r'\bOUP\s+(\d+)\b', basis, re.IGNORECASE)
+    if oup_match:
+        article_id = oup_match.group(1)
+        return f"https://academic.oup.com/nar/article/{article_id}", "OUP / NAR"
+
+    # Wikipedia article — "Wikipedia Thioredoxin_reductase"
+    wiki_match = re.search(r'\bWikipedia\s+(\S+)', basis, re.IGNORECASE)
+    if wiki_match:
+        title = wiki_match.group(1).replace(" ", "_")
+        return f"https://en.wikipedia.org/wiki/{title}", f"Wikipedia"
+
+    # No parseable identifier — return plain text
+    return None, basis[:60]
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +426,7 @@ def build_sheet1(wb, ranked_genes):
     headers = [
         "Rank", "Gene", "Protein Name", "Function", "Category",
         "Papers", "Score", "Has PDB", "Top Ligand", "Simulatable",
-        "Ligand Note", "UniProt Search"
+        "Ligand Note", "Reference Paper", "UniProt Search"
     ]
     header_row(ws, 1, headers)
 
@@ -217,6 +435,7 @@ def build_sheet1(wb, ranked_genes):
         simulatable = gd.get("simulatable", False)
         ligand      = gd.get("top_ligand", "")
         note        = gd.get("ligand_note", "")
+        basis       = gd.get("ligand_basis", "")
 
         if not simulatable:
             bg         = EXCLUDED_BG
@@ -247,10 +466,25 @@ def build_sheet1(wb, ranked_genes):
             ligand if ligand != "no_ligand" else "—",
             "Yes" if simulatable else "No",
             note,
-            "",
+            "",   # Reference Paper — hyperlink added separately below
+            "",   # UniProt Search  — hyperlink added separately below
         ]
         body_row(ws, i, row_values, bg=bg, italic=italic, font_color=font_color)
-        hyperlink_cell(ws, i, 12,
+
+        # Column 12 — Reference Paper (clickable link to PDB / PMC / PubMed etc.)
+        ref_url, ref_text = get_gene_ref(gd["gene"], basis)
+        if ref_url:
+            hyperlink_cell(ws, i, 12, ref_url, ref_text)
+        else:
+            c = ws.cell(row=i, column=12, value=ref_text)
+            c.font = bf(color=font_color, italic=italic)
+            if bg:
+                c.fill = fill(bg)
+            c.alignment = left()
+            c.border = border()
+
+        # Column 13 — UniProt Search
+        hyperlink_cell(ws, i, 13,
                        UNIPROT_BASE.format(gene=gd["gene"]),
                        f"Search {gd['gene']}")
         ws.row_dimensions[i].height = 22
@@ -258,7 +492,7 @@ def build_sheet1(wb, ranked_genes):
     set_widths(ws, {
         "A": 6,  "B": 9,  "C": 32, "D": 45, "E": 18,
         "F": 8,  "G": 8,  "H": 9,  "I": 20, "J": 12,
-        "K": 40, "L": 18,
+        "K": 40, "L": 20, "M": 18,
     })
     freeze_filter(ws)
 
@@ -340,7 +574,7 @@ def build_sheet3(wb, recommended_pairs):
     headers = [
         "Priority", "Gene", "Protein Name", "Suggested Ligand",
         "Ligand Role", "Score", "Has PDB Structure",
-        "Needs Docking?", "Ligand Basis", "Notes"
+        "Needs Docking?", "Ligand Basis", "Reference Paper", "Notes"
     ]
     header_row(ws, 1, headers, bg=SUBHEADER_BG)
 
@@ -348,6 +582,7 @@ def build_sheet3(wb, recommended_pairs):
         gene    = pair["gene"]
         ligand  = pair["suggested_ligand"]
         docking = pair["needs_docking"]
+        basis   = pair.get("ligand_basis", "")
 
         docking_text = "YES — request from Siva Sir" if docking else "No — pull from PDB"
 
@@ -376,15 +611,29 @@ def build_sheet3(wb, recommended_pairs):
             round(pair["score"], 4),
             "Yes" if pair["has_pdb"] else "No",
             docking_text,
-            pair.get("ligand_basis", ""),
+            basis,
+            "",   # Reference Paper — hyperlink added separately below
             note,
         ]
         body_row(ws, i, row_values, bg=bg)
+
+        # Column 10 — Reference Paper clickable hyperlink
+        ref_url, ref_text = get_gene_ref(gene, basis)
+        if ref_url:
+            hyperlink_cell(ws, i, 10, ref_url, ref_text)
+        else:
+            c = ws.cell(row=i, column=10, value=ref_text)
+            c.font = bf()
+            if bg:
+                c.fill = fill(bg)
+            c.alignment = left()
+            c.border = border()
+
         ws.row_dimensions[i].height = 22
 
     set_widths(ws, {
         "A": 8,  "B": 9,  "C": 32, "D": 22, "E": 14,
-        "F": 8,  "G": 18, "H": 28, "I": 55, "J": 65,
+        "F": 8,  "G": 18, "H": 28, "I": 55, "J": 32, "K": 65,
     })
     freeze_filter(ws)
 
