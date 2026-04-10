@@ -1,0 +1,14 @@
+# ORCA output files — large, do not commit
+*.out
+*.gbw
+*.densities
+*.ges
+*.prop
+*.engrad
+*_trj.xyz
+*.hess
+*.cis
+
+# Literature mining raw data
+literature_mining/raw_papers/
+literature_mining/extracted/
