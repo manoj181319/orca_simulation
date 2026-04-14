@@ -38,20 +38,30 @@ def get_eps_subset(eps_start: int, eps_end: int) -> list:
     return subset
 
 
+def get_orca_path() -> str:
+    """Return full absolute path to ORCA executable.
+    ORCA requires full pathname for parallel (nprocs > 1) runs."""
+    import shutil
+    path = shutil.which("orca")
+    if not path:
+        print("ERROR: 'orca' executable not found in PATH.")
+        print("       Add your ORCA installation directory to PATH and retry.")
+        sys.exit(1)
+    return path
+
+
 def run_orca(inp_path: Path) -> str:
     """Run ORCA on a single input file. Returns 'ok' or 'failed'."""
     out_path = inp_path.with_suffix(".out")
+    orca_exe = get_orca_path()
     try:
         result = subprocess.run(
-            ["orca", str(inp_path)],
+            [orca_exe, str(inp_path.resolve())],
             stdout=open(out_path, "w"),
             stderr=subprocess.STDOUT,
             cwd=inp_path.parent
         )
         return "ok" if result.returncode == 0 else "failed"
-    except FileNotFoundError:
-        print("\nERROR: 'orca' executable not found. Is ORCA in your PATH?")
-        sys.exit(1)
     except Exception as e:
         print(f"\nERROR running ORCA on {inp_path.name}: {e}")
         return "failed"

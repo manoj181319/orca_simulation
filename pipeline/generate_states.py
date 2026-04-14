@@ -67,12 +67,26 @@ def get_charge_mult(config: dict, state: str):
     return int(charge), int(mult)
 
 
+def get_orca_path() -> str:
+    """Return full absolute path to ORCA executable.
+    ORCA requires full pathname for parallel (nprocs > 1) runs."""
+    import shutil
+    path = shutil.which("orca")
+    if not path:
+        print("ERROR: 'orca' executable not found in PATH.")
+        print("       Add your ORCA installation directory to PATH and retry.")
+        sys.exit(1)
+    return path
+
+
 def run_orca(inp_path: Path) -> bool:
     out_path = inp_path.with_suffix(".out")
+    orca_exe = get_orca_path()
     print(f"    Running ORCA on {inp_path.name} ...")
+    print(f"    ORCA path: {orca_exe}")
     try:
         result = subprocess.run(
-            ["orca", str(inp_path)],
+            [orca_exe, str(inp_path.resolve())],
             stdout=open(out_path, "w"),
             stderr=subprocess.STDOUT,
             cwd=inp_path.parent
@@ -82,9 +96,6 @@ def run_orca(inp_path: Path) -> bool:
             return False
         print(f"    Completed. Output: {out_path}")
         return True
-    except FileNotFoundError:
-        print("    ERROR: 'orca' executable not found. Is ORCA in your PATH?")
-        sys.exit(1)
     except Exception as e:
         print(f"    ERROR running ORCA: {e}")
         return False
