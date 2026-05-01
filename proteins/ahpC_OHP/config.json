@@ -1,0 +1,25 @@
+{
+  "protein_id": "ahpC_OHP",
+  "gene": "ahpC",
+  "protein_name": "Alkyl hydroperoxide reductase C",
+  "ligand_name": "organic hydroperoxide",
+  "pdb_id": "",
+  "ligand_residue": "",
+  "pdb_notes": "AhpC substrate (organic hydroperoxide) is transient \u2014 no stable co-crystal. Search RCSB for Pa AhpC: try 'ahpC Pseudomonas aeruginosa'. Cumene hydroperoxide or tert-butyl hydroperoxide can be used as model substrate \u2014 confirm choice with Shiva Sir. Ligand must be manually added to PDB.",
+  "review_multiplicity": false,
+  "multiplicity_notes": "Standard organic ligand \u2014 default values should be correct.",
+  "states": {
+    "neutral": {
+      "charge": 0,
+      "multiplicity": 1
+    },
+    "radical": {
+      "charge": 1,
+      "multiplicity": 2
+    },
+    "reduced": {
+      "charge": -1,
+      "multiplicity": 2
+    }
+  }
+}
