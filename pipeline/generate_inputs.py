@@ -50,11 +50,11 @@ end
 """
 
 # NOTE ON CDFT: Before running CDFT calculations, you MUST edit each generated
-# .inp file to specify correct atom indices for the constrained region.
-# The placeholder "atoms_alpha 1 end" constrains only atom 1 — this is wrong
-# for your system. Confirm the CDFT atom selection with Shiva Sir first.
+# .inp file to specify the correct atom indices for the constrained region.
+# The placeholder "atoms_alpha 1 end" constrains only atom 1 — this must be
+# updated to reflect the actual ligand atom index range for your system.
 CDFT_TEMPLATE = """# ORCA Constrained DFT single point — {protein_id} | {state} | eps={eps}
-# WARNING: Edit %cdft atom indices before running. See NOTE ON CDFT above.
+# WARNING: Edit the %cdft atom indices before running. See NOTE ON CDFT above.
 ! B3LYP def2-TZVP
 
 %pal

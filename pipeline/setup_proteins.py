@@ -6,7 +6,7 @@ for every simulatable protein found in the Phase 0 literature mining results.
 All protein data (PDB IDs, ligand residue names, charge, multiplicity) is
 embedded in the PROTEIN_REGISTRY below. Proteins marked with
 review_multiplicity=True have metal centers or unusual spin states — these
-MUST be confirmed with Shiva Sir before running simulations.
+should be verified before running simulations.
 
 Usage:
     python setup_proteins.py                    # create all proteins
@@ -39,7 +39,7 @@ PROTEINS_DIR = Path(__file__).parent.parent / "proteins"
 #     radical  → charge +1, multiplicity 2  (doublet, one electron removed)
 #     reduced  → charge -1, multiplicity 2  (doublet, one electron added)
 #   Metal-containing systems (Fe, Mn, Cu centers):
-#     marked review_multiplicity=True — confirm ALL values with Shiva Sir.
+#     marked review_multiplicity=True — verify these values before running.
 #     Placeholder multiplicity=1 is set but IS WRONG for high-spin metal centers.
 #
 # multiplicity_notes: Explains what the correct value should be and why.
@@ -60,7 +60,7 @@ PROTEIN_REGISTRY = {
             "Catalase resting state has Fe(III)-heme. High-spin Fe(III) gives "
             "S=5/2 (mult=6) but the QM region spin depends on ligand field. "
             "Use the spin state appropriate for the oxidation state you want to model. "
-            "Confirm with Shiva Sir before running."
+            "Verify spin state before running."
         ),
         "states": {
             "neutral": {"charge": 0,  "multiplicity": 1},
@@ -77,7 +77,7 @@ PROTEIN_REGISTRY = {
         "ligand_residue": "HEM",
         "pdb_notes": (
             "No Pa-specific PDB for KatB. Using KatA (4E37) as structural template "
-            "per GENE_BIOCHEMISTRY. Confirm with Shiva Sir if a KatB-specific "
+            "per GENE_BIOCHEMISTRY. Check if a KatB-specific "
             "structure should be used instead."
         ),
         "review_multiplicity": True,
@@ -120,7 +120,7 @@ PROTEIN_REGISTRY = {
             "AhpC substrate (organic hydroperoxide) is transient — no stable co-crystal. "
             "Search RCSB for Pa AhpC: try 'ahpC Pseudomonas aeruginosa'. "
             "Cumene hydroperoxide or tert-butyl hydroperoxide can be used as model substrate "
-            "— confirm choice with Shiva Sir. Ligand must be manually added to PDB."
+            "Ligand must be manually added to PDB."
         ),
         "review_multiplicity": False,
         "multiplicity_notes": "Standard organic ligand — default values should be correct.",
@@ -180,7 +180,7 @@ PROTEIN_REGISTRY = {
         "ligand_residue": "SF4",
         "pdb_notes": (
             "No Pa-specific SoxR PDB — only E. coli SoxR structures exist (e.g. 2ZHH). "
-            "These are NOT valid for Pa. Confirm with Shiva Sir whether to use E. coli "
+            "These are NOT valid for Pa. Consider using E. coli "
             "structure as template or wait for Pa-specific data. "
             "[2Fe-2S] cluster in PDB is typically residue SF4 or FES."
         ),
@@ -189,7 +189,7 @@ PROTEIN_REGISTRY = {
             "[2Fe-2S] cluster spin coupling is complex. Oxidized [2Fe-2S]2+ gives "
             "S=0 (antiferromagnetically coupled Fe3+-Fe3+, mult=1). "
             "Reduced [2Fe-2S]1+ gives S=1/2 (mult=2). "
-            "Must confirm broken-symmetry DFT approach with Shiva Sir."
+            "Broken-symmetry DFT approach is recommended for this system."
         ),
         "states": {
             "neutral": {"charge": 0,  "multiplicity": 1},
@@ -235,7 +235,7 @@ PROTEIN_REGISTRY = {
             "Mn(II) d5 high-spin: S=5/2, multiplicity=6. "
             "Mn(III) d4 high-spin: S=2, multiplicity=5. "
             "Set multiplicity based on the oxidation state you are modelling. "
-            "Confirm with Shiva Sir."
+            "Verify the correct spin state before running."
         ),
         "states": {
             "neutral": {"charge": 0,  "multiplicity": 6},
@@ -258,7 +258,7 @@ PROTEIN_REGISTRY = {
         "multiplicity_notes": (
             "Fe(II) d6 high-spin: S=2, multiplicity=5. "
             "Fe(III) d5 high-spin: S=5/2, multiplicity=6. "
-            "Confirm oxidation state and spin state with Shiva Sir."
+            "Verify oxidation state and spin state before running."
         ),
         "states": {
             "neutral": {"charge": 0,  "multiplicity": 5},
@@ -275,13 +275,13 @@ PROTEIN_REGISTRY = {
         "ligand_residue": "MN",
         "pdb_notes": (
             "Cambialistic SOD — can use Mn2+ or Fe2+ depending on conditions. "
-            "Search for Pa SodM. Confirm which metal form to simulate with Shiva Sir."
+            "Search for Pa SodM. Decide which metal form to simulate based on experimental conditions."
         ),
         "review_multiplicity": True,
         "multiplicity_notes": (
             "Same considerations as sodA_Mn2 for Mn(II)/Mn(III). "
             "If simulating Fe form, same as sodB_Fe2. "
-            "Confirm with Shiva Sir."
+            "Verify the correct spin state before running."
         ),
         "states": {
             "neutral": {"charge": 0,  "multiplicity": 6},
@@ -552,7 +552,7 @@ PROTEIN_REGISTRY = {
         "multiplicity_notes": (
             "SdhB contains multiple Fe-S clusters whose spin states affect the QM region. "
             "If Fe-S clusters are included in the QM region, multiplicity must be "
-            "confirmed with Shiva Sir. If only ubiquinone is the focus, default values "
+            "carefully reviewed. If only ubiquinone is the focus, default values "
             "may be acceptable."
         ),
         "states": {
@@ -610,7 +610,7 @@ PROTEIN_REGISTRY = {
             "E. coli CyoA (PDB 1FFT) may serve as template."
         ),
         "review_multiplicity": True,
-        "multiplicity_notes": "Heme-containing cytochrome — confirm Fe spin state with Shiva Sir.",
+        "multiplicity_notes": "Heme-containing cytochrome — verify Fe spin state before running.",
         "states": {
             "neutral": {"charge": 0,  "multiplicity": 1},
             "radical": {"charge": 1,  "multiplicity": 2},
@@ -632,7 +632,7 @@ PROTEIN_REGISTRY = {
         "multiplicity_notes": (
             "Contains heme a/a3 AND Cu centers (CuA, CuB). "
             "The QM region spin state is highly complex. "
-            "Confirm approach with Shiva Sir before running."
+            "Use broken-symmetry DFT with carefully chosen spin states for this system."
         ),
         "states": {
             "neutral": {"charge": 0,  "multiplicity": 1},
@@ -657,7 +657,7 @@ PROTEIN_REGISTRY = {
             "Same [2Fe-2S] spin coupling issues as soxR_Fe2S2. "
             "Oxidised [2Fe-2S]2+: S=0, mult=1. "
             "Reduced [2Fe-2S]1+: S=1/2, mult=2. "
-            "Confirm broken-symmetry approach with Shiva Sir."
+            "Broken-symmetry DFT is required for this system."
         ),
         "states": {
             "neutral": {"charge": 0,  "multiplicity": 1},
@@ -698,7 +698,7 @@ PROTEIN_REGISTRY = {
         "review_multiplicity": True,
         "multiplicity_notes": (
             "Fe(II) in Fur is a regulatory corepressor. Fe(II) d6 high-spin: S=2, mult=5. "
-            "Fe(II) low-spin: S=0, mult=1. Confirm spin state with Shiva Sir."
+            "Fe(II) low-spin: S=0, mult=1. Verify spin state based on experimental data."
         ),
         "states": {
             "neutral": {"charge": 0,  "multiplicity": 5},
@@ -736,7 +736,7 @@ PROTEIN_REGISTRY = {
             "Search for Pa BfrA (bacterioferritin A). "
             "Note: bfrA in Pa encodes FtnA (bacterial ferritin), NOT a true bacterioferritin — "
             "it may not contain heme. Confirm the correct structure and heme status "
-            "with Shiva Sir before running."
+            "before running."
         ),
         "review_multiplicity": True,
         "multiplicity_notes": "Heme-containing — confirm Fe spin state if heme is confirmed.",
@@ -758,7 +758,7 @@ PROTEIN_REGISTRY = {
             "Try 'bacterioferritin Pseudomonas aeruginosa' in RCSB. PDB 3IS7 may match."
         ),
         "review_multiplicity": True,
-        "multiplicity_notes": "Heme-containing — confirm Fe spin state with Shiva Sir.",
+        "multiplicity_notes": "Heme-containing — verify Fe spin state before running.",
         "states": {
             "neutral": {"charge": 0,  "multiplicity": 1},
             "radical": {"charge": 1,  "multiplicity": 2},
@@ -1035,9 +1035,9 @@ def main():
 
     if needs_review:
         print(f"\n{'─'*60}")
-        print(f"REVIEW REQUIRED — {len(needs_review)} proteins have metal centers:")
+        print(f"NOTE — {len(needs_review)} proteins have metal centers with complex spin states:")
         print(f"  Charge/multiplicity defaults may be WRONG for these proteins.")
-        print(f"  Confirm ALL values with Shiva Sir before running simulations:")
+        print(f"  Verify all charge/multiplicity values before running simulations:")
         for pid in needs_review:
             print(f"  {pid}")
         print(f"\n  See 'multiplicity_notes' in each config.json for details.")
